@@ -1,16 +1,19 @@
 pipeline{
     agent{
-        label 'slave01'
+        label 'slave_1'
     }
     tools{
-        jdk 'java17'
-        maven 'maven3'
+        jdk 'JAVA_HOME'
+        maven 'MAVEN_HOME'
     }
+    environment {
+         SCANNER_HOME=tool 'sonar-server'
+     }
     stages{
         stage('SCM checkout'){
             steps{
                 sh 'echo cloning the repo into the slave machine'
-                git branch: 'main', url: 'https://github.com/venkatesh-reddy679/Board_Game-CI-CD.git'
+                git branch: 'main', url: 'https://github.com/re24ddy/Sundar-Anna.git'
             }
         }
         stage('compile source code'){
@@ -39,77 +42,86 @@ pipeline{
                 trivy fs --format table -o trivy-fs-report.html .'''
             }
         }
-        stage('code quality check'){
-            steps{
-                withSonarQubeEnv('sonarqube-server') {
-                    sh '''echo performing source code quality analysis using soarqube-scanner
-                    mvn sonar:sonar -Dsonar.projectName="Board-Game" -Dsonar.projectKey="Board-Game" -Dsonar.java.binaries=./target/classes'''
+        stage("Sonarqube Analysis"){
+             steps{
+                 withSonarQubeEnv('sonar-server') {
+                     sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=BOARD_GAME \
+                     -Dsonar.projectKey=BOARD_GAME \
+                     '''
+                 }
+             }
+         }
+        stage("Quality Gate"){
+           steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
                 }
-            }
-        }
-        stage('quality gate'){
-            steps{
-               script{
-                   try{
-                        timeout(time: 10, unit: 'MINUTES') {
-                            sh "echo pipeline execution will be halted for upto to 10 minutes for receiving the quaity gate status from sonarqube server"
-                            waitForQualityGate abortPipeline: true, credentialsId: 'sonarqube_token'
-                        }
-                   }catch(Exception e){
-                       error 'timeout error raised because the quality gate status is not received'
-                   }
-               }
-                
-            }
+            } 
         }
         stage('deploy the artifact to nexus'){
             steps{
-                withMaven(globalMavenSettingsConfig: '', jdk: 'java17', maven: 'maven3', mavenSettingsConfig: 'nexus', traceability: true) {
+                withMaven(globalMavenSettingsConfig: '', jdk: 'JAVA_HOME', maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus', traceability: true) {
                     sh '''echo deploying the build artifact to the nexus repository with version 0.0.${BUILD_NUMBER}
                     mvn deploy'''
                 }
             }
         }
-        stage('build-scan-push docker image'){
-            environment{
-                image_tag="venkateshreddy679/board-game:${env.BUILD_NUMBER}"
+         stage('OWASP DP SCAN') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'owasp-dp-check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
-            steps{
-                sh '''echo buildig the docker image with tag ${image_tag}
-                docker build -t ${image_tag} .
-                echo scanning the docker image using trivy
-                trivy image --format table -o trivy-image-report.html ${image_tag}'''
-                withDockerRegistry(credentialsId: 'docker_cred', url: 'https://index.docker.io/v1/') {
-                    sh '''echo pushing the image to docker
-                    docker push ${image_tag}'''
+        }
+        
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh "trivy fs . > trivyfs.txt"
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script{
+                    sh 'docker build -t harish117/board_game_app .'
                 }
             }
         }
-        stage('update yaml file'){
-            steps{
-                sh '''echo updating the deployment-service.yaml file with the latest image tag
-                sed -i "s/board-game:[0-9]*/board-game:${BUILD_NUMBER}/g" ./deployment-service.yaml'''
-            }
-        }
-       stage('continuous delivery'){
-            steps{
-                withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'kuberetes_sa_token',
-                namespace: 'board-game', restrictKubeConfigAccess: false, serverUrl: 'https://34.125.129.163:6443') {
-                    sh ''' kubectl apply -f deployment-service.yaml'''
+        stage('Containerize And Test') {
+            steps {
+                script{
+                    sh 'docker run -d --name board-game-app harish117/board_game_app && slep 10 && docker stop board-game-app'
                 }
             }
         }
-        stage('verify delivery and audit'){
+        stage('Push Image To Dockerhub') {
+            steps {
+                script{
+                    withCredentials([string(credentialsId: 'docker-cred', variable: 'docker-cred')]) {
+                    sh 'docker login -u harish117 --password ${docker-cred}' }
+                    sh 'docker push harish117/board_game_app:latest'
+                }
+            }
+        }    
+         stage("TRIVY Image Scan"){
             steps{
-                withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'kuberetes_sa_token',
-                namespace: 'board-game', restrictKubeConfigAccess: false, serverUrl: 'https://34.125.129.163:6443') {
-                    sh ''' kubectl get deployment
-                    kubectl get service
-                    sudo touch kubeaudit_result.txt
-                    sudo chmod 777 kubeaudit_result.txt
-                    kubeaudit all > kubeaudit_result.txt'''
+                sh "trivy image harish117/board_game_app:latest > trivyimage.txt" 
+            }
+        }
+        stage('Deploy to Kubernetes'){
+            steps{
+                script{
+                    
+                        withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                                sh 'kubectl apply -f deployment-service.yaml'
+                               
+                                sh 'kubectl get svc'
+                                sh 'kubectl get all'
+                        }  
+                    
                 }
             }
         }
+       
+      
+        
     }
 }

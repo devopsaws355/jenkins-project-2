@@ -20,7 +20,7 @@ pipeline{
             steps{
                 
                 sh '''echo compiling the source code
-                mvn compile'''
+                mvn clean compile'''
             }
         }
         stage('test compile source code'){

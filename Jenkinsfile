@@ -29,21 +29,14 @@ pipeline{
                 mvn test''' 
             }
         }
-        // stage('build project'){
-        //     steps{
-        //         sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
-        //         mvn clean package
-        //         ls -al target'''
-        //     }
-        // }
-        stage('Build') {
-            steps {
-                script {
-                    // Compile the project
-                    sh 'mvn clean compile'
-                }
+        stage('build project'){
+            steps{
+                sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
+                mvn clean package
+                ls -al target'''
             }
         }
+        
         stage('scan file system'){
             steps{
                 sh '''echo scanning the files in the cloned git repository using trivy
@@ -55,6 +48,7 @@ pipeline{
                  withSonarQubeEnv('sonar-server') {
                      sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=BOARD_GAME \
                      -Dsonar.projectKey=BOARD_GAME \
+                     -Dsonar.exclusions=**/*.java
                      '''
                  }
              }

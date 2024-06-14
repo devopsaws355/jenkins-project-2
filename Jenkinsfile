@@ -29,11 +29,19 @@ pipeline{
                 mvn test''' 
             }
         }
-        stage('build project'){
-            steps{
-                sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
-                mvn clean package
-                ls -al target'''
+        // stage('build project'){
+        //     steps{
+        //         sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
+        //         mvn clean package
+        //         ls -al target'''
+        //     }
+        // }
+        stage('Build') {
+            steps {
+                script {
+                    // Compile the project
+                    sh 'mvn clean compile'
+                }
             }
         }
         stage('scan file system'){

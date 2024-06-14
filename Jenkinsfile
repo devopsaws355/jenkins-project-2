@@ -75,7 +75,7 @@ pipeline{
                 spec: '''{
                       "files": [
                         {
-                          "pattern": "*.war",
+                          "pattern": "*.jar",
                            "target": "local-snapshots"
                         }
                     ]

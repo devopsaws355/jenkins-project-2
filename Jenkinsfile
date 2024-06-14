@@ -58,14 +58,30 @@ pipeline{
                 }
             } 
         }
-        stage('deploy the artifact to nexus'){
-            steps{
-                withMaven(globalMavenSettingsConfig: '', jdk: 'JAVA_HOME', maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus', traceability: true) {
-                    sh '''echo deploying the build artifact to the nexus repository with version 0.0.${BUILD_NUMBER}
-                    mvn deploy'''
-                }
-            }
+        //  stage('deploy the artifact to nexus'){
+        //     steps{
+        //         withMaven(globalMavenSettingsConfig: '', jdk: 'JAVA_HOME', maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus', traceability: true) {
+        //             sh '''echo deploying the build artifact to the nexus repository with version 0.0.${BUILD_NUMBER}
+        //             mvn deploy'''
+        //         }
+        //     }
+        // }
+        stage('Jfrog Artifact Upload') {
+            steps {
+              rtUpload (
+                serverId: 'jfrog-server',
+                spec: '''{
+                      "files": [
+                        {
+                          "pattern": "*.war",
+                           "target": "local-snapshots"
+                        }
+                    ]
+                }'''
+              )
+          }
         }
+
          stage('OWASP DP SCAN') {
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'owasp-dp-check'
@@ -106,20 +122,20 @@ pipeline{
                 sh "trivy image harish117/board_game_app:latest > trivyimage.txt" 
             }
         }
-        stage('Deploy to Kubernetes'){
-            steps{
-                script{
+        // stage('Deploy to Kubernetes'){
+        //     steps{
+        //         script{
                     
-                        withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                                sh 'kubectl apply -f deployment-service.yaml'
+        //                 withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+        //                         sh 'kubectl apply -f deployment-service.yaml'
                                
-                                sh 'kubectl get svc'
-                                sh 'kubectl get all'
-                        }  
+        //                         sh 'kubectl get svc'
+        //                         sh 'kubectl get all'
+        //                 }  
                     
-                }
-            }
-        }
+        //         }
+        //     }
+        // }
        
       
         

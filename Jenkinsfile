@@ -106,7 +106,7 @@ pipeline{
         stage('Containerize And Test') {
             steps {
                 script{
-                    sh 'docker run -d --name board-game-app harish117/board_game_app && slep 10 && docker stop board-game-app'
+                    sh 'docker run -d --name board-game-app harish117/board_game_app && sleep 10 && docker stop board-game-app'
                 }
             }
         }

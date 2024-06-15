@@ -114,7 +114,7 @@ pipeline{
             steps {
                 script{
                     withCredentials([string(credentialsId: 'docker-cred', variable: 'docker-cred')]) {
-                    sh 'docker login -u harish117 --password ${docker-cred}' }
+                    sh 'docker login -u harish117 --password-stdin ${docker-cred}' }
                     sh 'docker push harish117/board_game_app:latest'
                 }
             }

@@ -113,8 +113,8 @@ pipeline{
         stage('Push Image To Dockerhub') {
             steps {
                 script{
-                    withCredentials([string(credentialsId: 'docker-cred', variable: 'docker-cred')]) {
-                    sh 'docker login -u harish117 --password-stdin ${docker-cred}' }
+                    withCredentials([string(credentialsId: 'DockerHubPass', variable: 'DockerHubPass')]) {
+                    sh 'docker login -u harish117 --password-stdin ${DockerHubPass}' }
                     sh 'docker push harish117/board_game_app:latest'
                 }
             }

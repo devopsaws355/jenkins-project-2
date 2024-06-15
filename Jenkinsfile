@@ -68,21 +68,21 @@ pipeline{
         //         }
         //     }
         // }
-        stage('Jfrog Artifact Upload') {
-            steps {
-              rtUpload (
-                serverId: 'jfrog-server',
-                spec: '''{
-                      "files": [
-                        {
-                          "pattern": "*.jar",
-                           "target": "local-snapshots"
-                        }
-                    ]
-                }'''
-              )
-          }
-        }
+        // stage('Jfrog Artifact Upload') {
+        //     steps {
+        //       rtUpload (
+        //         serverId: 'jfrog-server',
+        //         spec: '''{
+        //               "files": [
+        //                 {
+        //                   "pattern": "*.jar",
+        //                    "target": "local-snapshots"
+        //                 }
+        //             ]
+        //         }'''
+        //       )
+        //   }
+        // }
 
          stage('OWASP DP SCAN') {
             steps {

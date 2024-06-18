@@ -29,9 +29,9 @@ pipeline{
         }
         stage('build project'){
             steps{
-                withMaven(maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus') {
-                    sh 'mvn clean package'
-                }
+                sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
+                mvn clean package
+                ls -al target'''
         }
         }
         stage('scan file system'){

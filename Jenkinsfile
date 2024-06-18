@@ -30,7 +30,7 @@ pipeline{
         stage('build project'){
             steps{
                 withMaven(maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus') {
-                    sh 'mvn clean install'
+                    sh 'mvn clean package'
                 }
         }
         }

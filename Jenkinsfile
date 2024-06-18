@@ -1,3 +1,4 @@
+
 pipeline{
     agent{
         label 'slave_1'
@@ -6,20 +7,6 @@ pipeline{
         jdk 'JAVA_HOME'
         maven 'MAVEN_HOME'
     }
-    environment {
-         SCANNER_HOME=tool 'sonar-server'
-        DOCKERHUB_CREDENTIALS=credentials('DockerHubPass')
-        // This can be nexus3 or nexus2
-        NEXUS_VERSION = "nexus3"
-        // This can be http or https
-        NEXUS_PROTOCOL = "http"
-        // Where your Nexus is running
-        NEXUS_URL = "192.168.0.124:8081"
-        // Repository where we will upload the artifact
-        NEXUS_REPOSITORY = "repository-example"
-        // Jenkins credential id to authenticate to Nexus OSS
-        NEXUS_CREDENTIAL_ID = "nexus-credentials"
-      }
     stages{
         stage('SCM checkout'){
             steps{
@@ -31,7 +18,7 @@ pipeline{
             steps{
                 
                 sh '''echo compiling the source code
-                mvn clean compile'''
+                mvn compile'''
             }
         }
         stage('test compile source code'){
@@ -47,149 +34,83 @@ pipeline{
                 ls -al target'''
             }
         }
-        
         stage('scan file system'){
             steps{
                 sh '''echo scanning the files in the cloned git repository using trivy
                 trivy fs --format table -o trivy-fs-report.html .'''
             }
         }
-        stage("Sonarqube Analysis"){
-             steps{
-                 withSonarQubeEnv('sonar-server') {
-                     sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=BOARD_GAME \
-                     -Dsonar.projectKey=BOARD_GAME \
-                     -Dsonar.exclusions=**/*.java
-                     '''
-                 }
-             }
-         }
-        stage("Quality Gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
-                }
-            } 
-        }
-         stage("publish to nexus") {
-            steps {
-                script {
-                    // Read POM xml file using 'readMavenPom' step , this step 'readMavenPom' is included in: https://plugins.jenkins.io/pipeline-utility-steps
-                    pom = readMavenPom file: "pom.xml";
-                    // Find built artifact under target folder
-                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-                    // Print some info from the artifact found
-                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-                    // Extract the path from the File found
-                    artifactPath = filesByGlob[0].path;
-                    // Assign to a boolean response verifying If the artifact name exists
-                    artifactExists = fileExists artifactPath;
-
-                    if(artifactExists) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version}";
-
-                        nexusArtifactUploader(
-                            nexusVersion: NEXUS_VERSION,
-                            protocol: NEXUS_PROTOCOL,
-                            nexusUrl: NEXUS_URL,
-                            groupId: pom.groupId,
-                            version: pom.version,
-                            repository: NEXUS_REPOSITORY,
-                            credentialsId: NEXUS_CREDENTIAL_ID,
-                            artifacts: [
-                                // Artifact generated such as .jar, .ear and .war files.
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: artifactPath,
-                                type: pom.packaging],
-
-                                // Lets upload the pom.xml file for additional information for Transitive dependencies
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: "pom.xml",
-                                type: "pom"]
-                            ]
-                        );
-
-                    } else {
-                        error "*** File: ${artifactPath}, could not be found";
-                    }
-                }
-            }
-        }
-
-        stage('Jfrog Artifact Upload') {
-            steps {
-              rtUpload (
-                serverId: 'jfrog-server',
-                spec: '''{
-                      "files": [
-                        {
-                          "pattern": "*.jar",
-                           "target": "local-snapshots"
-                        }
-                    ]
-                }'''
-              )
-          }
-        }
-
-         stage('OWASP DP SCAN') {
-            steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'owasp-dp-check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
-        }
-        
-        stage('TRIVY FS SCAN') {
-            steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                script{
-                    sh 'docker build -t harish117/board_game_app .'
-                }
-            }
-        }
-        stage('Containerize And Test') {
-            steps {
-                script{
-                    sh 'docker run -d --name board-game-app harish117/board_game_app && sleep 10 && docker stop board-game-app'
-                }
-            }
-        }
-        stage('Push Image To Dockerhub') {
-            steps {
-                script{
-                    withCredentials([string(credentialsId: 'DockerHubPass', variable: 'DockerHubPass')]) {
-                    sh 'docker login -u harish117 --password-stdin ${DockerHubPass}' }
-                    sh 'docker push harish117/board_game_app:latest'
-                }
-            }
-        }    
-         stage("TRIVY Image Scan"){
+        stage('code quality check'){
             steps{
-                sh "trivy image harish117/board_game_app:latest > trivyimage.txt" 
+                withSonarQubeEnv('sonar-server') {
+                    sh '''echo performing source code quality analysis using soarqube-scanner
+                    mvn sonar:sonar -Dsonar.projectName="Board-Game" -Dsonar.projectKey="Board-Game" -Dsonar.java.binaries=./target/classes'''
+                }
             }
         }
-        // stage('Deploy to Kubernetes'){
+        stage('quality gate'){
+            steps{
+               script{
+                   try{
+                        timeout(time: 10, unit: 'MINUTES') {
+                            sh "echo pipeline execution will be halted for upto to 10 minutes for receiving the quaity gate status from sonarqube server"
+                            waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+                        }
+                   }catch(Exception e){
+                       error 'timeout error raised because the quality gate status is not received'
+                   }
+               }
+                
+            }
+        }
+        stage('deploy the artifact to nexus'){
+            steps{
+                withMaven(globalMavenSettingsConfig: '', jdk: 'JAVA_HOME', maven: 'MAVEN_HOME', mavenSettingsConfig: 'nexus', traceability: true) {
+                    sh '''echo deploying the build artifact to the nexus repository with version 0.0.${BUILD_NUMBER}
+                    mvn deploy'''
+                }
+            }
+        }
+        stage('build-scan-push docker image'){
+            environment{
+                image_tag="harish117/board-game:${env.BUILD_NUMBER}"
+            }
+            steps{
+                sh '''echo buildig the docker image with tag ${image_tag}
+                docker build -t ${image_tag} .
+                echo scanning the docker image using trivy
+                trivy image --format table -o trivy-image-report.html ${image_tag}'''
+                withDockerRegistry(credentialsId: 'DockerHubPass', url: 'https://index.docker.io/v1/') {
+                    sh '''echo pushing the image to docker
+                    docker push ${image_tag}'''
+                }
+            }
+        }
+        stage('update yaml file'){
+            steps{
+                sh '''echo updating the deployment-service.yaml file with the latest image tag
+                sed -i "s/board-game:[0-9]*/board-game:${BUILD_NUMBER}/g" ./deployment-service.yaml'''
+            }
+        }
+       // stage('continuous delivery'){
+       //      steps{
+       //          withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'kuberetes_sa_token',
+       //          namespace: 'board-game', restrictKubeConfigAccess: false, serverUrl: 'https://34.125.129.163:6443') {
+       //              sh ''' kubectl apply -f deployment-service.yaml'''
+       //          }
+       //      }
+       //  }
+        // stage('verify delivery and audit'){
         //     steps{
-        //         script{
-                    
-        //                 withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-        //                         sh 'kubectl apply -f deployment-service.yaml'
-                               
-        //                         sh 'kubectl get svc'
-        //                         sh 'kubectl get all'
-        //                 }  
-                    
+        //         withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'kuberetes_sa_token',
+        //         namespace: 'board-game', restrictKubeConfigAccess: false, serverUrl: 'https://34.125.129.163:6443') {
+        //             sh ''' kubectl get deployment
+        //             kubectl get service
+        //             sudo touch kubeaudit_result.txt
+        //             sudo chmod 777 kubeaudit_result.txt
+        //             kubeaudit all > kubeaudit_result.txt'''
         //         }
         //     }
         // }
-       
-      
-        
     }
 }

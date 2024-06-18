@@ -30,7 +30,8 @@ pipeline{
         stage('build project'){
             steps{
                 sh '''echo cleaing the maven projct by deleting any existing target directory and build the project
-                mvn clean package
+                mvn clean install
+                mvn package
                 ls -al target'''
             }
         }

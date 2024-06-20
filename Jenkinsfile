@@ -20,7 +20,7 @@ pipeline {
         }
         stage('Git Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/re24ddy/Ekart.git'
+                git branch: 'main', url: 'https://github.com/re24ddy/Sundar-Anna.git'
             }
         }
         
@@ -39,8 +39,8 @@ pipeline {
         stage("Sonarqube Analysis"){
             steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=EKART \
-                    -Dsonar.projectKey=EKART \
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=BOARD-GAME-APP \
+                    -Dsonar.projectKey=BOARD-GAME-APP \
                     -Dsonar.exclusions=**/*.java
                     '''
                 }
@@ -84,8 +84,8 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'DockerHubPass', toolName: 'docker') {
-                        sh "docker build -t shopping-cart -f docker/Dockerfile ."
-                        sh "docker tag  shopping-cart harish117/shopping-cart:latest"
+                        sh "docker build -t board-game-app -f docker/Dockerfile ."
+                        sh "docker tag  board-game-app harish117/board-game-app:latest"
                         
                     }
                 }
@@ -94,14 +94,14 @@ pipeline {
         stage('Containerize And Test') {
             steps {
                 script{
-                    sh 'docker run -d --name shopping-cart harish117/shopping-cart:latest && sleep 10 && docker stop shopping-cart'
+                    sh 'docker run -d --name board-game-app harish117/board-game-app:latest && sleep 10 && docker stop board-game-app'
                 }
             }
         }
         
         stage('Trivy Scan') {
             steps {
-                sh "trivy image harish117/shopping-cart:latest > trivy-report.txt "
+                sh "trivy image harish117/board-game-app:latest > trivy-report.txt "
                 
             }
         }
@@ -110,7 +110,7 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'DockerHubPass', toolName: 'docker') {
-                        sh "docker push harish117/shopping-cart:latest"
+                        sh "docker push harish117/board-game-app:latest"
                     }
                 }
                  
